@@ -1,12 +1,10 @@
+from machine import Pin, I2C, ADC, SPI
 import dht, onewire, ds18x20, network, utime, os
 from umqtt.simple import MQTTClient
-from libs import bmp280, ds3231, mq7, mq4, dotenv, neo6m, sdcard
+from libs import bmp280, mq4, mq7, ds3231, dotenv, neo6m, sdcard
 from libs.gps_fix_manager import GPSFixManager
 from time import sleep, time, mktime
-from machine import Pin, I2C, ADC, SPI
-
-led = Pin(2, Pin.OUT)
-led.value(1)
+from sys import exit
 
 i2c0 = I2C(0, scl=Pin(22), sda=Pin(21), freq=10000)
 i2c1 = I2C(1, sda=Pin(4), scl=Pin(5))
@@ -15,7 +13,6 @@ spi = SPI(
 )
 cs = Pin(27, Pin.OUT)
 
-dotenv.load_env()
 topico_data = "em/" + str(dotenv.MQTT_ID)
 topico_debug = "em/debugV0"
 versao_em = "0"
@@ -36,27 +33,13 @@ print(os.listdir("/sd"))
 
 dados = {}
 
-mq4 = MQ4.MQ4(pinData=39)
+mq4 = mq4.MQ4(pinData=39)
 mq4.calibrate()
-mq7 = MQ7.MQ7(pinData=36)
+mq7 = mq7.MQ7(pinData=36)
 mq7.calibrate()
 
 print("Ro MQ4:", mq4._ro)
 print("Ro MQ7:", mq7._ro)
-
-print("Calibrado e funcionando")
-
-
-def conecta_wifi():
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    if not wlan.isconnected():
-        print("Conectando ao Wi-Fi...")
-        wlan.connect(dotenv.WIFI_SSID, dotenv.WIFI_PASS)
-        while not wlan.isconnected():
-            sleep(0.5)
-            print("CONECTANDO")
-        print("Wi-Fi conectado:", wlan.ifconfig())
 
 
 def timestamp():
@@ -174,7 +157,7 @@ client = MQTTClient(dotenv.MQTT_ID, dotenv.MQTT_BROKER, port=dotenv.MQTT_PORT)
 client.connect()
 
 led.value(0)
-while True:
+while False:
     inicio = time()
 
     print("lendo dht11")
@@ -227,3 +210,54 @@ while True:
         sleep(60 - tempo_execucao)
     else:
         print("Tempo de execução excedido: " + str(tempo_execucao))
+
+
+def leds():
+    led = Pin(2, Pin.OUT)
+    led.value(1)
+
+
+def wifi_connect():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+
+    if not wlan.isconnected():
+        print("Connecting to Wi-Fi...")
+        wlan.connect(dotenv.WIFI_SSID, dotenv.WIFI_PASS)
+
+        while not wlan.isconnected():
+            sleep(0.5)
+            print("Connecting...")
+        print("Wi-Fi connected:", wlan.ifconfig())
+
+    return wlan
+
+
+def mqtt_connect(broker, port=1883, id="em"):
+    try:
+        client = MQTTClient(id, broker, port=port)
+        client.connect()
+        print("MQTT connected")
+
+    except Exception as e:
+        print("MQTT connection error:", e)
+        client = None
+
+    return client
+
+
+if __name__ == "__main__":
+    dotenv.load_env()
+    try:
+        wifi_ssid = os.getenv("WIFI_SSID", "em")
+        wifi_pass = os.getenv("WIFI_PASS", "password")
+        mqtt_broker = os.getenv("MQTT_BROKER", "mqtt.idea.tec.br")
+        mqtt_port = int(os.getenv("MQTT_PORT", "1883"))
+        mqtt_id = os.getenv("MQTT_ID", "em_v0")
+    except Exception as e:
+        print("Erro ao carregar configurações do .env:", e)
+        exit(1)
+
+    leds()
+    wifi_connect()
+    client = mqtt_connect(dotenv.MQTT_BROKER, int(dotenv.MQTT_PORT), dotenv.MQTT_ID)
