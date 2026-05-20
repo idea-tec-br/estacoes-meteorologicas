@@ -35,12 +35,13 @@ def filter_lines(station: str, lines: list[str]) -> list[str]:
     date = datetime.now()
     delta = 344
 
-    lat = "-27.67"
-    long = "-48.55"
-    alt = "5.0"
+    latitude = "-27.67"
+    longitude = "-48.55"
+    altitude = "5.0"
 
     keys = []
     values = []
+    influx_line = ""
     influx_lines = []
 
     for line in lines:
@@ -62,7 +63,7 @@ def filter_lines(station: str, lines: list[str]) -> list[str]:
             read_numbers = False
         else:
             if read_numbers:
-                influx_line = f"{station} lat={lat},long={long},alt={alt}"
+                influx_line = f"{station},iata=FLN,icao=SBFL latitude={latitude},longitude={longitude},altitude={altitude}"
 
                 values = line.split()
                 date = date + timedelta(seconds=delta)
@@ -81,15 +82,22 @@ def send_to_influxdb(lines: list[str]) -> None:
     org = os.getenv("INFLUXDB_ORG", "feira")
     bucket = os.getenv("INFLUXDB_BUCKET", "weather-stations")
 
-    endpoint = f"{url}/api/v2/write?org={org}&bucket={bucket}&precision=ns"
+    endpoint = f"{url}/api/v2/write"
     headers = {
         "Authorization": f"Token {token}",
         "Content-Type": "text/plain; charset=utf-8",
     }
+    params = {
+        "org": org,
+        "bucket": bucket,
+        "precision": "ns",
+    }
     body = "\n".join(lines)
 
-    response = requests.post(endpoint, headers=headers, data=body.encode("utf-8"))
-    response.raise_for_status()
+    response = requests.post(endpoint, headers=headers, params=params, data=body.encode("utf-8"))
+    if not response.ok:
+        print(response.text)
+        response.raise_for_status()
 
 
 if __name__ == "__main__":
